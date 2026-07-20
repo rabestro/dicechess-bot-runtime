@@ -17,7 +17,7 @@ depend on this library instead is a follow-up).
 | --- | --- |
 | `Signatures` | HMAC-SHA256 sign/verify, ±5 minute replay window, constant-time comparison. |
 | `WebhookHandler` | Orchestrates one delivery: handshake, signature check, dispatch to the strategy function. Never throws. |
-| `TurnContext` | What the strategy function sees: `gameId`, `dfen`, and both clocks in milliseconds (`null` for an untimed game). |
+| `TurnContext` | What the strategy function sees: `gameId`, `dfen`, both clocks in milliseconds (`null` for an untimed game), and every complete legal turn already walked out (`null` if unknown). |
 | `CustomHandlerServer` | A JDK `HttpServer` wrapper reading `FUNCTIONS_CUSTOMHANDLER_PORT` — optional; bring your own HTTP layer if you'd rather. |
 | `JsonFiles` | Generic JSON-object-of-strings file loader (an opening book, or any similar lookup table), degrades gracefully when the file is absent. |
 
@@ -28,6 +28,15 @@ Function<TurnContext, List<String>> strategy = ctx -> List.of("e2e4"); // your m
 String secret = System.getenv("DICECHESS_WEBHOOK_SECRET");
 WebhookHandler handler = new WebhookHandler(secret, strategy);
 CustomHandlerServer.startFromEnvironment(handler);
+```
+
+A strategy with no engine of its own can skip `dfen` entirely and just pick one path from
+`ctx.legalMoves()` — pass play-api's base URL to the other `WebhookHandler` constructor and the
+rare capped turn (the tree too large to inline) is fetched from the public
+`GET /games/{id}/moves` automatically:
+
+```java
+WebhookHandler handler = new WebhookHandler(secret, "https://play-api.jc.id.lv", strategy);
 ```
 
 Full API docs with more examples: <https://rabestro.github.io/dicechess-bot-runtime/>.

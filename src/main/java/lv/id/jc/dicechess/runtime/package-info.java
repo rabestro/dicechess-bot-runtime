@@ -24,15 +24,23 @@
  * strategy itself is a plain {@code java.util.function.Function}, so a lambda, a method
  * reference, or a Scala function converted via {@code asJava} all work unchanged.
  *
+ * <h2>Bots with no engine of their own</h2>
+ *
+ * <p>{@link lv.id.jc.dicechess.runtime.TurnContext#legalMoves} carries every complete legal
+ * turn, already walked from the server's prefix tree — a strategy can pick straight from that
+ * list and never parse a DFEN or generate a move itself. The rare turn where the tree is too
+ * large to inline (the envelope carries {@code null}) falls back to {@code GET
+ * /games/{id}/moves} — a public, unauthenticated endpoint — if the {@link
+ * lv.id.jc.dicechess.runtime.WebhookHandler} constructor that takes play-api's base URL was
+ * used; otherwise {@code legalMoves} is simply {@code null} on that turn, same as it always is
+ * when a strategy doesn't need it.
+ *
  * <h2>What is deliberately not here</h2>
  *
- * <p>Game logic, DFEN parsing, and move legality are the bot author's concern (or the real
- * engine's, if the bot links one) — this package only delivers a {@link
- * lv.id.jc.dicechess.runtime.TurnContext} to the strategy function and relays back whatever
- * moves it returns. The inline legal-move tree the envelope sometimes carries is deliberately
- * not surfaced yet — reading it (and falling back to a REST fetch when the envelope omits it
- * past the server's cap) would need this library to make its own outbound calls, which it does
- * not do today. It also does not read or write an opening book itself; {@link
+ * <p>DFEN parsing and independent move legality are still not this package's concern — it
+ * relays the server's own tree rather than recomputing one, so an engine-linked bot (like
+ * {@code dicechess-bot-scala}) is free to ignore {@code legalMoves} entirely and keep deriving
+ * moves from {@code dfen} itself. It also does not read or write an opening book itself; {@link
  * lv.id.jc.dicechess.runtime.JsonFiles} is a generic string-map loader a strategy can use for
  * that, or for any similarly simple lookup table.
  */

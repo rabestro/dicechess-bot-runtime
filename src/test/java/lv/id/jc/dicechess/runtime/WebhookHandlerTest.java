@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -98,6 +102,121 @@ class WebhookHandlerTest {
 
 		assertThat(seenContext.get().remainingMillis()).isNull();
 		assertThat(seenContext.get().opponentRemainingMillis()).isNull();
+	}
+
+	@Test
+	void anInlineLegalMovesTreeIsFlattenedIntoCompletePaths() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"legalMoves\":{\"e2e4\":{\"g1f3\":{},\"b1c3\":{}},\"d2d4\":{\"d4d5\":{}}}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().legalMoves())
+				.containsExactlyInAnyOrder(List.of("e2e4", "g1f3"), List.of("e2e4", "b1c3"), List.of("d2d4", "d4d5"));
+	}
+
+	@Test
+	void anEmptyLegalMovesTreeIsAGenuineEmptyListNotNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\",\"legalMoves\":{}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().legalMoves()).isNotNull().isEmpty();
+	}
+
+	@Test
+	void anAbsentLegalMovesFieldIsNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().legalMoves()).isNull();
+	}
+
+	@Test
+	void aCappedLegalMovesTreeWithNoBaseUrlConfiguredIsNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy); // 2-arg: no fallback capability
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\",\"legalMoves\":null}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().legalMoves()).isNull();
+	}
+
+	@Test
+	void aCappedLegalMovesTreeFetchesTheFallbackWhenABaseUrlIsConfigured() throws IOException {
+		var fallbackBody = "{\"version\":4,\"dfen\":\"x\",\"dicePending\":true,\"legalMoves\":{\"e2e4\":{\"g1f3\":{}}}}";
+		var server = stubMovesEndpoint("g1", fallbackBody);
+		try {
+			var baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+			var seenContext = new AtomicReference<TurnContext>();
+			Function<TurnContext, List<String>> strategy = ctx -> {
+				seenContext.set(ctx);
+				return List.of();
+			};
+			var handler = new WebhookHandler(SECRET, baseUrl, strategy);
+			var body =
+					"{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\",\"legalMoves\":null}}";
+
+			handler.handle(signedHeaders(body, NOW), body, NOW);
+
+			assertThat(seenContext.get().legalMoves()).containsExactly(List.of("e2e4", "g1f3"));
+		} finally {
+			server.stop(0);
+		}
+	}
+
+	@Test
+	void aFailedFallbackFetchDegradesToNullNotAnException() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		// Port 1: nothing listens there, so the connection is refused immediately.
+		var handler = new WebhookHandler(SECRET, "http://127.0.0.1:1", strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\",\"legalMoves\":null}}";
+
+		var response = handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(response.status()).isEqualTo(200);
+		assertThat(seenContext.get().legalMoves()).isNull();
+	}
+
+	private static HttpServer stubMovesEndpoint(String gameId, String responseBody) throws IOException {
+		var server = HttpServer.create(new InetSocketAddress(0), 0);
+		server.createContext("/games/" + gameId + "/moves", exchange -> {
+			var bytes = responseBody.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(200, bytes.length);
+			try (var out = exchange.getResponseBody()) {
+				out.write(bytes);
+			}
+		});
+		server.start();
+		return server;
 	}
 
 	@Test

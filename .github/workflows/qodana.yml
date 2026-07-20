@@ -1,8 +1,8 @@
 name: "CI: Code Quality"
 
-# Requires a QODANA_TOKEN repo secret from a Qodana Cloud project linked to this repo
-# (https://www.jetbrains.com/help/qodana/qodana-cloud.html) — that's a one-time, human-owned
-# setup step; this workflow does nothing useful until it exists.
+# Runs fully without QODANA_TOKEN — the Community linter scans and uploads SARIF to GitHub
+# code scanning regardless (verified: first run, no token set, passed clean). A token only
+# adds Qodana Cloud's own dashboard/PR-history features on top; add one later if wanted.
 on:
   workflow_dispatch:
   pull_request:

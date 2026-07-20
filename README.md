@@ -11,11 +11,6 @@ Scala — see [`dicechess-bot-scala`](https://github.com/rabestro/dicechess-bot-
 bot built on the same protocol (currently carrying its own copy of this code; migrating it to
 depend on this library instead is a follow-up).
 
-## Licensing
-
-**MIT.** Unlike [`dicechess-bot-scala`](https://github.com/rabestro/dicechess-bot-scala), this
-library links no game engine — it never AGPL-copyleft-infects a bot that depends on it.
-
 ## Layout
 
 | Path | Role |

@@ -1,0 +1,16 @@
+#-------------------------------------------------------------------------------#
+#               Qodana analysis is configured by qodana.yaml file               #
+#             https://www.jetbrains.com/help/qodana/qodana-yaml.html            #
+#-------------------------------------------------------------------------------#
+
+version: "1.0"
+
+#Specify inspection profile for code analysis
+profile:
+  name: qodana.starter
+
+projectJDK: "25"
+
+#Qodana supports other languages, for example, Python, JavaScript, TypeScript, Go, C#, PHP
+#For all supported languages see https://www.jetbrains.com/help/qodana/linters.html
+linter: jetbrains/qodana-jvm-community:2026.1

@@ -1,0 +1,105 @@
+name: "Ops: Release"
+
+# Computes the next version and tags it; pushing the tag is what actually publishes —
+# see cd.yml, which is tag-triggered and does the deploy. This workflow only tags.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: "patch"
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Run validation checks
+        run: mvn --batch-mode test javadoc:javadoc
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version
+        id: bump_version
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const latestTag = '${{ steps.get_tag.outputs.latest_tag }}';
+            const bumpType = '${{ github.event.inputs.bump }}';
+
+            const cleanVersion = latestTag.startsWith('v') ? latestTag.slice(1) : latestTag;
+            const match = cleanVersion.match(/^(\d+)\.(\d+)\.(\d+)/);
+
+            let major = 0;
+            let minor = 0;
+            let patch = 0;
+
+            if (match) {
+              major = parseInt(match[1], 10);
+              minor = parseInt(match[2], 10);
+              patch = parseInt(match[3], 10);
+            }
+
+            if (bumpType === 'major') {
+              major += 1;
+              minor = 0;
+              patch = 0;
+            } else if (bumpType === 'minor') {
+              minor += 1;
+              patch = 0;
+            } else {
+              patch += 1;
+            }
+
+            const newVersion = `${major}.${minor}.${patch}`;
+            const newTag = `v${newVersion}`;
+            core.setOutput('new_version', newVersion);
+            core.setOutput('new_tag', newTag);
+            console.log(`New version will be: ${newVersion}`);
+            console.log(`New tag will be: ${newTag}`);
+
+      - name: Update version in pom.xml
+        run: |
+          mvn --batch-mode versions:set \
+            -DnewVersion="${{ steps.bump_version.outputs.new_version }}-SNAPSHOT" \
+            -DgenerateBackupPoms=false
+
+          git add pom.xml
+          git commit -m "chore(release): bump version to ${{ steps.bump_version.outputs.new_version }}-SNAPSHOT"
+
+          branch_name=$(git rev-parse --abbrev-ref HEAD)
+          git push origin "$branch_name"
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ steps.bump_version.outputs.new_tag }}"
+          git push origin "${{ steps.bump_version.outputs.new_tag }}"

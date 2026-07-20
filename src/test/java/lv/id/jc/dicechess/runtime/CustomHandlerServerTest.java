@@ -19,7 +19,7 @@ class CustomHandlerServerTest {
 
 	@Test
 	void handshakeAndASignedTurnOverRealHttp() throws Exception {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of("b1c3"));
+		var handler = new WebhookHandler(SECRET, ctx -> List.of("b1c3"));
 		var server = CustomHandlerServer.start(0, "/api/webhook", handler);
 		try {
 			var base = "http://127.0.0.1:" + server.getAddress().getPort() + "/api/webhook";

@@ -2,10 +2,10 @@
 
 The transport/protocol plumbing shared by DiceChess webhook bots: HMAC-SHA256 signature
 verification, the one-time ownership handshake, and (optionally) an HTTP server for the Azure
-Functions custom-handler model. A bot author supplies one thing — a function from a DFEN string
-to a list of UCI moves — and gets a working webhook bot.
+Functions custom-handler model. A bot author supplies one thing — a function from a
+[`TurnContext`](#usage) to a list of UCI moves — and gets a working webhook bot.
 
-Every public type speaks only `String`, `java.util.List`, and `java.util.Map`. Nothing
+Every public type speaks only `String`, `Long`, `java.util.List`, and `java.util.Map`. Nothing
 library-specific crosses the boundary, so this is callable identically from Java, Kotlin, or
 Scala — see [`dicechess-bot-scala`](https://github.com/rabestro/dicechess-bot-scala) for a real
 bot built on the same protocol (currently carrying its own copy of this code; migrating it to
@@ -17,13 +17,14 @@ depend on this library instead is a follow-up).
 | --- | --- |
 | `Signatures` | HMAC-SHA256 sign/verify, ±5 minute replay window, constant-time comparison. |
 | `WebhookHandler` | Orchestrates one delivery: handshake, signature check, dispatch to the strategy function. Never throws. |
+| `TurnContext` | What the strategy function sees: `gameId`, `dfen`, and both clocks in milliseconds (`null` for an untimed game). |
 | `CustomHandlerServer` | A JDK `HttpServer` wrapper reading `FUNCTIONS_CUSTOMHANDLER_PORT` — optional; bring your own HTTP layer if you'd rather. |
 | `JsonFiles` | Generic JSON-object-of-strings file loader (an opening book, or any similar lookup table), degrades gracefully when the file is absent. |
 
 ## Usage
 
 ```java
-Function<String, List<String>> strategy = dfen -> List.of("e2e4"); // your move logic
+Function<TurnContext, List<String>> strategy = ctx -> List.of("e2e4"); // your move logic
 String secret = System.getenv("DICECHESS_WEBHOOK_SECRET");
 WebhookHandler handler = new WebhookHandler(secret, strategy);
 CustomHandlerServer.startFromEnvironment(handler);

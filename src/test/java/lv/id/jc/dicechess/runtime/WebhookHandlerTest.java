@@ -28,7 +28,7 @@ class WebhookHandlerTest {
 
 	@Test
 	void handshakeEchoesTheNonceWithoutASignature() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
 
 		var response = handler.handle(Map.of(), "{\"type\":\"verification\",\"nonce\":\"abc123\"}", NOW);
 
@@ -38,7 +38,7 @@ class WebhookHandlerTest {
 
 	@Test
 	void aSignedTurnRelaysTheStrategysMoves() {
-		Function<String, List<String>> strategy = dfen -> List.of("e2e4", "e7e5");
+		Function<TurnContext, List<String>> strategy = ctx -> List.of("e2e4", "e7e5");
 		var handler = new WebhookHandler(SECRET, strategy);
 		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"some-dfen\"}}";
 
@@ -51,24 +51,59 @@ class WebhookHandlerTest {
 	}
 
 	@Test
-	void theStrategyReceivesExactlyTheDfenFromTheEnvelope() {
-		var seenDfen = new AtomicReference<String>();
-		Function<String, List<String>> strategy = dfen -> {
-			seenDfen.set(dfen);
+	void theStrategyReceivesGameIdAndDfenFromTheEnvelope() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
 			return List.of();
 		};
 		var handler = new WebhookHandler(SECRET, strategy);
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w NBK\"}}";
+		var body =
+				"{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w NBK\"}}";
 
 		handler.handle(signedHeaders(body, NOW), body, NOW);
 
-		assertThat(seenDfen.get()).isEqualTo("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w NBK");
+		assertThat(seenContext.get().gameId()).isEqualTo("g1");
+		assertThat(seenContext.get().dfen()).isEqualTo("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w NBK");
+	}
+
+	@Test
+	void theStrategyReceivesItsOwnClockAsRemainingAndTheOpponentsAsOpponentRemaining() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"Black\",\"state\":{\"dfen\":\"x\","
+				+ "\"clocks\":{\"white\":295000,\"black\":300000}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().remainingMillis()).isEqualTo(300000L);
+		assertThat(seenContext.get().opponentRemainingMillis()).isEqualTo(295000L);
+	}
+
+	@Test
+	void anUntimedGameLeavesBothClockFieldsNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().remainingMillis()).isNull();
+		assertThat(seenContext.get().opponentRemainingMillis()).isNull();
 	}
 
 	@Test
 	void headerLookupIsCaseInsensitive() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"x\"}}";
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
 		var headers = Map.of(
 				"X-DiceChess-Timestamp", String.valueOf(NOW),
 				"X-DiceChess-Signature", Signatures.sign(SECRET, NOW, body));
@@ -78,8 +113,8 @@ class WebhookHandlerTest {
 
 	@Test
 	void aMissingOrTamperedSignatureIsRejectedWith401() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"x\"}}";
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
 		var tampered =
 				Map.of(WebhookHandler.TIMESTAMP_HEADER, String.valueOf(NOW), WebhookHandler.SIGNATURE_HEADER, "deadbeef");
 
@@ -89,8 +124,8 @@ class WebhookHandlerTest {
 
 	@Test
 	void aStaleTimestampIsRejectedEvenWithAGenuineSignatureReplayGuard() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"x\"}}";
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
 		var staleTimestamp = NOW - 3600;
 
 		assertThat(handler.handle(signedHeaders(body, staleTimestamp), body, NOW).status()).isEqualTo(401);
@@ -98,35 +133,45 @@ class WebhookHandlerTest {
 
 	@Test
 	void garbageJsonAndAMissingDfenAre400NeverAnException() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
 		assertThat(handler.handle(Map.of(), "not json at all", NOW).status()).isEqualTo(400);
 
-		var noDfen = "{\"type\":\"yourTurn\",\"state\":{}}";
+		var noDfen = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{}}";
 		assertThat(handler.handle(signedHeaders(noDfen, NOW), noDfen, NOW).status()).isEqualTo(400);
 	}
 
 	@Test
+	void aMissingGameIdOrSeatIs400() {
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
+		var noGameId = "{\"type\":\"yourTurn\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
+		var noSeat = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"state\":{\"dfen\":\"x\"}}";
+
+		assertThat(handler.handle(signedHeaders(noGameId, NOW), noGameId, NOW).status()).isEqualTo(400);
+		assertThat(handler.handle(signedHeaders(noSeat, NOW), noSeat, NOW).status()).isEqualTo(400);
+	}
+
+	@Test
 	void anUnrecognizedTypeIs400() {
-		var handler = new WebhookHandler(SECRET, dfen -> List.of());
+		var handler = new WebhookHandler(SECRET, ctx -> List.of());
 		assertThat(handler.handle(Map.of(), "{\"type\":\"somethingElse\"}", NOW).status()).isEqualTo(400);
 	}
 
 	@Test
 	void aStrategyThatThrowsIs500NotAnException() {
-		Function<String, List<String>> strategy = dfen -> {
+		Function<TurnContext, List<String>> strategy = ctx -> {
 			throw new RuntimeException("boom");
 		};
 		var handler = new WebhookHandler(SECRET, strategy);
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"x\"}}";
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
 
 		assertThat(handler.handle(signedHeaders(body, NOW), body, NOW).status()).isEqualTo(500);
 	}
 
 	@Test
 	void aStrategyThatReturnsNullIsTreatedAsNoMoves() {
-		Function<String, List<String>> strategy = dfen -> null;
+		Function<TurnContext, List<String>> strategy = ctx -> null;
 		var handler = new WebhookHandler(SECRET, strategy);
-		var body = "{\"type\":\"yourTurn\",\"state\":{\"dfen\":\"x\"}}";
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
 
 		var response = handler.handle(signedHeaders(body, NOW), body, NOW);
 

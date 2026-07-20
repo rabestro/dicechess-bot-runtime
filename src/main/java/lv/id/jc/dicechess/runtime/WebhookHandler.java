@@ -27,15 +27,15 @@ public final class WebhookHandler {
 	private static final Gson GSON = new Gson();
 
 	private final String secret;
-	private final Function<String, List<String>> strategy;
+	private final Function<TurnContext, List<String>> strategy;
 
 	/**
 	 * Creates a handler bound to one secret and one strategy.
 	 *
 	 * @param secret the webhook secret issued by the platform when the bot registered
-	 * @param strategy chooses moves for a position: a DFEN string in, a UCI move path out
+	 * @param strategy chooses moves for a turn: a {@link TurnContext} in, a UCI move path out
 	 */
-	public WebhookHandler(String secret, Function<String, List<String>> strategy) {
+	public WebhookHandler(String secret, Function<TurnContext, List<String>> strategy) {
 		this.secret = secret;
 		this.strategy = strategy;
 	}
@@ -106,14 +106,31 @@ public final class WebhookHandler {
 			return error(401, "invalid or expired signature");
 		}
 
+		if (!envelope.has("gameId") || !envelope.has("seat")) {
+			return error(400, "missing gameId or seat");
+		}
 		if (!envelope.has("state") || !envelope.getAsJsonObject("state").has("dfen")) {
 			return error(400, "missing state.dfen");
 		}
-		var dfen = envelope.getAsJsonObject("state").get("dfen").getAsString();
+		var gameId = envelope.get("gameId").getAsString();
+		var seat = envelope.get("seat").getAsString();
+		var state = envelope.getAsJsonObject("state");
+		var dfen = state.get("dfen").getAsString();
+
+		Long remainingMillis = null;
+		Long opponentRemainingMillis = null;
+		if (state.has("clocks") && !state.get("clocks").isJsonNull()) {
+			var clocks = state.getAsJsonObject("clocks");
+			var white = clocks.get("white").getAsLong();
+			var black = clocks.get("black").getAsLong();
+			remainingMillis = seat.equals("White") ? white : black;
+			opponentRemainingMillis = seat.equals("White") ? black : white;
+		}
+		var context = new TurnContext(gameId, dfen, remainingMillis, opponentRemainingMillis);
 
 		List<String> moves;
 		try {
-			moves = strategy.apply(dfen);
+			moves = strategy.apply(context);
 		} catch (RuntimeException e) {
 			return error(500, "strategy failed: " + e.getMessage());
 		}

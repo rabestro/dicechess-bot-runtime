@@ -8,8 +8,8 @@ Functions custom-handler model. A bot author supplies one thing — a function f
 Every public type speaks only `String`, `Long`, `java.util.List`, and `java.util.Map`. Nothing
 library-specific crosses the boundary, so this is callable identically from Java, Kotlin, or
 Scala — see [`dicechess-bot-scala`](https://github.com/rabestro/dicechess-bot-scala) for a real
-bot built on the same protocol (currently carrying its own copy of this code; migrating it to
-depend on this library instead is a follow-up).
+bot depending on it: engine-linked, so it reads only `ctx.dfen()` and ignores everything else in
+`TurnContext`, which is exactly the point — a strategy takes what it needs.
 
 ## Layout
 

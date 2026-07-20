@@ -4,13 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-	<groupId>lv.id.jc</groupId>
-	<artifactId>dicechess-bot-runtime</artifactId>
-	<version>0.1.1-SNAPSHOT</version>
-	<packaging>jar</packaging>
+    <groupId>lv.id.jc</groupId>
+    <artifactId>dicechess-bot-runtime</artifactId>
+    <version>0.1.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
     <name>DiceChess Bot Runtime</name>
-    <description>Transport runtime for DiceChess webhook bots: HMAC signing, the ownership handshake, and HTTP wiring for the Azure Functions custom-handler model.
+    <description>Transport runtime for DiceChess webhook bots: HMAC signing, the ownership handshake, and HTTP wiring
+        for the Azure Functions custom-handler model.
     </description>
     <url>https://github.com/rabestro/dicechess-bot-runtime</url>
     <inceptionYear>2026</inceptionYear>

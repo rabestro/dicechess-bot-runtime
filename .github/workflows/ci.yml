@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Run tests
+        run: mvn --batch-mode test
+
+      # A hard gate, not just a docs.yml side effect: doclint=all + failOnWarning=true (pom.xml)
+      # means missing or malformed Javadoc on public API fails CI here, before it ever reaches
+      # docs.yml's publish step.
+      - name: Javadoc quality gate
+        run: mvn --batch-mode javadoc:javadoc

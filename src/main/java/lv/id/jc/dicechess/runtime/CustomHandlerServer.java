@@ -64,7 +64,7 @@ public final class CustomHandlerServer {
                 var response = handler.handle(headers, rawBody, Instant.now().getEpochSecond());
 
                 var bytes = response.jsonBody().getBytes(StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(response.status(), bytes.length);
                 try (var out = exchange.getResponseBody()) {
                     out.write(bytes);

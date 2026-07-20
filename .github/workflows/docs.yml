@@ -38,7 +38,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: target/site/apidocs
+          path: target/reports/apidocs
 
   deploy:
     name: Deploy to GitHub Pages

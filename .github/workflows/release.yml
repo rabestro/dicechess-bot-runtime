@@ -94,10 +94,16 @@ jobs:
             -DgenerateBackupPoms=false
 
           git add pom.xml
-          git commit -m "chore(release): bump version to ${{ steps.bump_version.outputs.new_version }}-SNAPSHOT"
-
-          branch_name=$(git rev-parse --abbrev-ref HEAD)
-          git push origin "$branch_name"
+          # pom.xml can already be at the target version (e.g. the very first release, where
+          # the checked-in -SNAPSHOT already matches) — nothing staged is a legitimate no-op,
+          # not a failure, so skip the commit/push rather than letting `git commit` error out.
+          if git diff --cached --quiet; then
+            echo "pom.xml already at ${{ steps.bump_version.outputs.new_version }}-SNAPSHOT — nothing to commit"
+          else
+            git commit -m "chore(release): bump version to ${{ steps.bump_version.outputs.new_version }}-SNAPSHOT"
+            branch_name=$(git rev-parse --abbrev-ref HEAD)
+            git push origin "$branch_name"
+          fi
 
       - name: Create and push tag
         run: |

@@ -1,7 +1,12 @@
 name: "Ops: Release"
 
-# Computes the next version and tags it; pushing the tag is what actually publishes —
-# see cd.yml, which is tag-triggered and does the deploy. This workflow only tags.
+# Computes the next version, tags it, AND publishes — does not rely on the tag push to trigger
+# cd.yml separately. GitHub does not fire push-triggered workflows for a push made with the
+# default GITHUB_TOKEN (documented anti-recursion behavior), so a tag created here would never
+# reach cd.yml on its own; v0.1.0 shipped with no package because of exactly this. cd.yml stays
+# as its own tag-triggered workflow too — it still fires for a tag a human pushes with their own
+# credentials from outside Actions, and doubles as a manual recovery path (workflow_dispatch) for
+# a tag that, like v0.1.0, was created before this fix.
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
 
     steps:
       - name: Checkout repository
@@ -38,6 +44,9 @@ jobs:
           distribution: temurin
           java-version: "25"
           cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Run validation checks
         run: mvn --batch-mode test javadoc:javadoc
@@ -109,3 +118,21 @@ jobs:
         run: |
           git tag "${{ steps.bump_version.outputs.new_tag }}"
           git push origin "${{ steps.bump_version.outputs.new_tag }}"
+
+      - name: Publish to GitHub Packages
+        run: |
+          mvn --batch-mode versions:set \
+            -DnewVersion="${{ steps.bump_version.outputs.new_version }}" \
+            -DgenerateBackupPoms=false
+          mvn --batch-mode deploy -DskipTests
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.bump_version.outputs.new_tag }}" \
+            --title "${{ steps.bump_version.outputs.new_tag }}" \
+            --generate-notes

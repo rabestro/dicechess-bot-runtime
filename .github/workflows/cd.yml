@@ -1,8 +1,14 @@
 name: CD
 
+# push: tags fires for a tag pushed with real user credentials (e.g. a human pushing from their
+# own machine) — GitHub does not fire this trigger for a tag pushed by another workflow using the
+# default GITHUB_TOKEN (documented anti-recursion behavior), which is why release.yml publishes
+# inline instead of depending on this. workflow_dispatch is the manual recovery path: pick the
+# existing tag as the ref to re-run a publish that release.yml missed before that fix landed.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -39,7 +39,7 @@ rare capped turn (the tree too large to inline) is fetched from the public
 WebhookHandler handler = new WebhookHandler(secret, "https://play-api.jc.id.lv", strategy);
 ```
 
-Full API docs with more examples: <https://rabestro.github.io/dicechess-bot-runtime/>.
+Full API docs with more examples: <https://jc.id.lv/dicechess-bot-runtime/>.
 
 ### Depend on it
 

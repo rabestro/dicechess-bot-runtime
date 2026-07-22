@@ -30,6 +30,11 @@ public final class WebhookHandler {
 	/** Header carrying the hex HMAC-SHA256 signature (see {@link Signatures}). */
 	public static final String SIGNATURE_HEADER = "x-dicechess-signature";
 
+	// Webhook-state field names reused across parsing (extracted to avoid duplicated literals).
+	private static final String FIELD_CLOCKS = "clocks";
+	private static final String FIELD_TIME_CONTROL = "timeControl";
+	private static final String VARIANT_FISCHER = "Fischer";
+
 	private static final Gson GSON = new Gson();
 	private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 	private static final Duration FALLBACK_TIMEOUT = Duration.ofSeconds(5);
@@ -150,8 +155,8 @@ public final class WebhookHandler {
 		// fischerIncrementMillis, so a null increment on a present clock is a valid sudden-death or
 		// per-move game.
 		TurnContext.Clock clock = null;
-		if (state.has("clocks") && state.get("clocks").isJsonObject()) {
-			var clocks = state.getAsJsonObject("clocks");
+		if (state.has(FIELD_CLOCKS) && state.get(FIELD_CLOCKS).isJsonObject()) {
+			var clocks = state.getAsJsonObject(FIELD_CLOCKS);
 			if (clocks.has("white") && clocks.has("black")) {
 				var white = clocks.get("white").getAsLong();
 				var black = clocks.get("black").getAsLong();
@@ -242,14 +247,14 @@ public final class WebhookHandler {
 	 * conversion to milliseconds.
 	 */
 	private static Long fischerIncrementMillis(JsonObject state) {
-		if (!state.has("timeControl") || !state.get("timeControl").isJsonObject()) {
+		if (!state.has(FIELD_TIME_CONTROL) || !state.get(FIELD_TIME_CONTROL).isJsonObject()) {
 			return null;
 		}
-		var timeControl = state.getAsJsonObject("timeControl");
-		if (!timeControl.has("Fischer") || !timeControl.get("Fischer").isJsonObject()) {
+		var timeControl = state.getAsJsonObject(FIELD_TIME_CONTROL);
+		if (!timeControl.has(VARIANT_FISCHER) || !timeControl.get(VARIANT_FISCHER).isJsonObject()) {
 			return null;
 		}
-		var increment = timeControl.getAsJsonObject("Fischer").get("incrementSeconds");
+		var increment = timeControl.getAsJsonObject(VARIANT_FISCHER).get("incrementSeconds");
 		if (increment == null || !increment.isJsonPrimitive() || !increment.getAsJsonPrimitive().isNumber()) {
 			return null;
 		}

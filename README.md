@@ -17,7 +17,7 @@ bot depending on it: engine-linked, so it reads only `ctx.dfen()` and ignores ev
 | --- | --- |
 | `Signatures` | HMAC-SHA256 sign/verify, ±5 minute replay window, constant-time comparison. |
 | `WebhookHandler` | Orchestrates one delivery: handshake, signature check, dispatch to the strategy function. Never throws. |
-| `TurnContext` | What the strategy function sees: `gameId`, `dfen`, both clocks in milliseconds (`null` for an untimed game), the per-turn Fischer increment in ms (`null` when the control has none), and every complete legal turn already walked out (`null` if unknown). |
+| `TurnContext` | What the strategy function sees: `gameId`, `dfen`, the game `clock` (both sides' remaining time plus the per-turn Fischer increment, all in ms — the whole `clock` is `null` for an untimed game), and every complete legal turn already walked out (`null` if unknown). |
 | `CustomHandlerServer` | A JDK `HttpServer` wrapper reading `FUNCTIONS_CUSTOMHANDLER_PORT` — optional; bring your own HTTP layer if you'd rather. |
 | `JsonFiles` | Generic JSON-object-of-strings file loader (an opening book, or any similar lookup table), degrades gracefully when the file is absent. |
 

@@ -4,20 +4,13 @@ import java.util.List;
 
 /**
  * What a strategy is told about the turn it must play — everything the webhook envelope's
- * {@code state} carries that a move-choosing function plausibly needs, beyond the position
- * itself.
+ * {@code state} carries that a move-choosing function plausibly needs, beyond the position itself.
  *
  * @param gameId the game's id — lets a strategy keep per-game state (a search tree, a
  *     transposition table) or tag its own logs
  * @param dfen the position plus the rolled dice for the side to move
- * @param remainingMillis milliseconds left on the mover's own clock, or {@code null} for an
- *     untimed game
- * @param opponentRemainingMillis milliseconds left on the opponent's clock, or {@code null} for
- *     an untimed game
- * @param incrementMillis the per-turn Fischer increment in milliseconds, credited after each
- *     completed turn; {@code null} when the game has no such increment (an unlimited, sudden-death,
- *     or per-move control) or the time control is absent. Feed it to the engine's time manager as
- *     the increment term — a {@code null} naturally coalesces to a zero increment
+ * @param clock the game clock as of this turn, or {@code null} for an untimed game — see {@link
+ *     Clock}, whose presence is itself the "is this game timed?" answer
  * @param legalMoves every complete legal turn, each as its sequence of UCI micro-moves — the
  *     server's prefix tree, already walked root-to-leaf, so a strategy with no engine of its own
  *     can play by picking one of these directly. An empty list is a genuine auto-pass (the roll
@@ -25,10 +18,20 @@ import java.util.List;
  *     omitted them (past the server's inline cap) and this handler was not given a play-api base
  *     URL to fetch the fallback from, or that fetch failed
  */
-public record TurnContext(
-		String gameId,
-		String dfen,
-		Long remainingMillis,
-		Long opponentRemainingMillis,
-		Long incrementMillis,
-		List<List<String>> legalMoves) {}
+public record TurnContext(String gameId, String dfen, Clock clock, List<List<String>> legalMoves) {
+
+	/**
+	 * The game clock as of this turn. Present only for a timed game — {@link TurnContext#clock()} is
+	 * {@code null} when the game is untimed, so a single null check answers "is this game timed?".
+	 * Both remaining times are always present together (a game has clocks for both sides or
+	 * neither), so they are primitive; only the increment can be absent.
+	 *
+	 * @param remainingMillis milliseconds left on the mover's own clock
+	 * @param opponentRemainingMillis milliseconds left on the opponent's clock
+	 * @param incrementMillis the per-turn Fischer increment in milliseconds, credited after each
+	 *     completed turn, or {@code null} when the control has none (a sudden-death or per-move
+	 *     game). Feed it to the engine's time manager as the increment term — a {@code null}
+	 *     naturally coalesces to a zero increment
+	 */
+	public record Clock(long remainingMillis, long opponentRemainingMillis, Long incrementMillis) {}
+}

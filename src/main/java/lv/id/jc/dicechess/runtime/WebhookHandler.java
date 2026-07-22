@@ -144,28 +144,20 @@ public final class WebhookHandler {
 		var state = envelope.getAsJsonObject("state");
 		var dfen = state.get("dfen").getAsString();
 
-		Long remainingMillis = null;
-		Long opponentRemainingMillis = null;
-		if (state.has("clocks") && !state.get("clocks").isJsonNull()) {
+		// The game clock for this turn (null for an untimed game): play-api sends both sides'
+		// remaining time under "clocks" only for a timed control. The per-turn increment lives in
+		// "timeControl" and only its Fischer variant carries one — parsed defensively by
+		// fischerIncrementMillis, so a null increment on a present clock is a valid sudden-death or
+		// per-move game.
+		TurnContext.Clock clock = null;
+		if (state.has("clocks") && state.get("clocks").isJsonObject()) {
 			var clocks = state.getAsJsonObject("clocks");
-			var white = clocks.get("white").getAsLong();
-			var black = clocks.get("black").getAsLong();
-			remainingMillis = seat.equals("White") ? white : black;
-			opponentRemainingMillis = seat.equals("White") ? black : white;
-		}
-
-		// The per-turn Fischer increment (ms). play-api sends the full time control, but only the
-		// Fischer variant carries an increment, so every other control — and an absent or malformed
-		// field — leaves this null. Defensive throughout: a surprising shape must never turn an
-		// otherwise-valid turn into a 400.
-		Long incrementMillis = null;
-		if (state.has("timeControl") && state.get("timeControl").isJsonObject()) {
-			var timeControl = state.getAsJsonObject("timeControl");
-			if (timeControl.has("Fischer") && timeControl.get("Fischer").isJsonObject()) {
-				var fischer = timeControl.getAsJsonObject("Fischer");
-				if (fischer.has("incrementSeconds")) {
-					incrementMillis = fischer.get("incrementSeconds").getAsLong() * 1000L;
-				}
+			if (clocks.has("white") && clocks.has("black")) {
+				var white = clocks.get("white").getAsLong();
+				var black = clocks.get("black").getAsLong();
+				var own = seat.equals("White") ? white : black;
+				var opponent = seat.equals("White") ? black : white;
+				clock = new TurnContext.Clock(own, opponent, fischerIncrementMillis(state));
 			}
 		}
 
@@ -181,8 +173,7 @@ public final class WebhookHandler {
 			}
 		}
 
-		var context =
-				new TurnContext(gameId, dfen, remainingMillis, opponentRemainingMillis, incrementMillis, legalMoves);
+		var context = new TurnContext(gameId, dfen, clock, legalMoves);
 
 		List<String> moves;
 		try {
@@ -241,6 +232,29 @@ public final class WebhookHandler {
 			}
 		}
 		return paths;
+	}
+
+	/**
+	 * The per-turn Fischer increment in milliseconds from the envelope's {@code timeControl}, or
+	 * {@code null} when the control is not Fischer or the field is missing or malformed. Fully
+	 * defensive: only a numeric, non-negative {@code incrementSeconds} within {@code int} range is
+	 * accepted, so no input can throw (which {@link #handle} would turn into a 400) or overflow the
+	 * conversion to milliseconds.
+	 */
+	private static Long fischerIncrementMillis(JsonObject state) {
+		if (!state.has("timeControl") || !state.get("timeControl").isJsonObject()) {
+			return null;
+		}
+		var timeControl = state.getAsJsonObject("timeControl");
+		if (!timeControl.has("Fischer") || !timeControl.get("Fischer").isJsonObject()) {
+			return null;
+		}
+		var increment = timeControl.getAsJsonObject("Fischer").get("incrementSeconds");
+		if (increment == null || !increment.isJsonPrimitive() || !increment.getAsJsonPrimitive().isNumber()) {
+			return null;
+		}
+		var seconds = increment.getAsLong();
+		return seconds >= 0 && seconds <= Integer.MAX_VALUE ? seconds * 1000L : null;
 	}
 
 	private static String stripTrailingSlash(String url) {

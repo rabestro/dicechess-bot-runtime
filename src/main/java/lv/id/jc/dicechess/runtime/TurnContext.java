@@ -14,6 +14,10 @@ import java.util.List;
  *     untimed game
  * @param opponentRemainingMillis milliseconds left on the opponent's clock, or {@code null} for
  *     an untimed game
+ * @param incrementMillis the per-turn Fischer increment in milliseconds, credited after each
+ *     completed turn; {@code null} when the game has no such increment (an unlimited, sudden-death,
+ *     or per-move control) or the time control is absent. Feed it to the engine's time manager as
+ *     the increment term — a {@code null} naturally coalesces to a zero increment
  * @param legalMoves every complete legal turn, each as its sequence of UCI micro-moves — the
  *     server's prefix tree, already walked root-to-leaf, so a strategy with no engine of its own
  *     can play by picking one of these directly. An empty list is a genuine auto-pass (the roll
@@ -26,4 +30,5 @@ public record TurnContext(
 		String dfen,
 		Long remainingMillis,
 		Long opponentRemainingMillis,
+		Long incrementMillis,
 		List<List<String>> legalMoves) {}

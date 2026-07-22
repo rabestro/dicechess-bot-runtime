@@ -154,6 +154,21 @@ public final class WebhookHandler {
 			opponentRemainingMillis = seat.equals("White") ? black : white;
 		}
 
+		// The per-turn Fischer increment (ms). play-api sends the full time control, but only the
+		// Fischer variant carries an increment, so every other control — and an absent or malformed
+		// field — leaves this null. Defensive throughout: a surprising shape must never turn an
+		// otherwise-valid turn into a 400.
+		Long incrementMillis = null;
+		if (state.has("timeControl") && state.get("timeControl").isJsonObject()) {
+			var timeControl = state.getAsJsonObject("timeControl");
+			if (timeControl.has("Fischer") && timeControl.get("Fischer").isJsonObject()) {
+				var fischer = timeControl.getAsJsonObject("Fischer");
+				if (fischer.has("incrementSeconds")) {
+					incrementMillis = fischer.get("incrementSeconds").getAsLong() * 1000L;
+				}
+			}
+		}
+
 		List<List<String>> legalMoves = null;
 		if (state.has("legalMoves")) {
 			var legalMovesElement = state.get("legalMoves");
@@ -166,7 +181,8 @@ public final class WebhookHandler {
 			}
 		}
 
-		var context = new TurnContext(gameId, dfen, remainingMillis, opponentRemainingMillis, legalMoves);
+		var context =
+				new TurnContext(gameId, dfen, remainingMillis, opponentRemainingMillis, incrementMillis, legalMoves);
 
 		List<String> moves;
 		try {

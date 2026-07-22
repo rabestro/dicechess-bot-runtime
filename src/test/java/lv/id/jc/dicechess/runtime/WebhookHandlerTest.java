@@ -105,6 +105,53 @@ class WebhookHandlerTest {
 	}
 
 	@Test
+	void aFischerControlSurfacesThePerTurnIncrementInMillis() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"timeControl\":{\"Fischer\":{\"initialSeconds\":300,\"incrementSeconds\":3}}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().incrementMillis()).isEqualTo(3000L);
+	}
+
+	@Test
+	void aNonFischerControlLeavesTheIncrementNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"timeControl\":{\"SuddenDeath\":{\"initialSeconds\":60}}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().incrementMillis()).isNull();
+	}
+
+	@Test
+	void anAbsentTimeControlLeavesTheIncrementNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\"}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().incrementMillis()).isNull();
+	}
+
+	@Test
 	void anInlineLegalMovesTreeIsFlattenedIntoCompletePaths() {
 		var seenContext = new AtomicReference<TurnContext>();
 		Function<TurnContext, List<String>> strategy = ctx -> {

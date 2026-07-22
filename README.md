@@ -1,5 +1,12 @@
 # DiceChess Bot Runtime
 
+[![CI](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/ci.yml)
+[![Code Quality](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/qodana.yml/badge.svg)](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/qodana.yml)
+[![Javadoc](https://img.shields.io/badge/Javadoc-jc.id.lv-1E90FF)](https://jc.id.lv/dicechess-bot-runtime/)
+[![Release](https://img.shields.io/github/v/tag/rabestro/dicechess-bot-runtime?label=release&sort=semver)](https://github.com/rabestro/dicechess-bot-runtime/packages)
+![Java](https://img.shields.io/badge/Java-25-orange)
+[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](./LICENSE)
+
 The transport/protocol plumbing shared by DiceChess webhook bots: HMAC-SHA256 signature
 verification, the one-time ownership handshake, and (optionally) an HTTP server for the Azure
 Functions custom-handler model. A bot author supplies one thing — a function from a

@@ -84,12 +84,12 @@ class WebhookHandlerTest {
 
 		handler.handle(signedHeaders(body, NOW), body, NOW);
 
-		assertThat(seenContext.get().remainingMillis()).isEqualTo(300000L);
-		assertThat(seenContext.get().opponentRemainingMillis()).isEqualTo(295000L);
+		assertThat(seenContext.get().clock().remainingMillis()).isEqualTo(300000L);
+		assertThat(seenContext.get().clock().opponentRemainingMillis()).isEqualTo(295000L);
 	}
 
 	@Test
-	void anUntimedGameLeavesBothClockFieldsNull() {
+	void anUntimedGameLeavesTheClockNull() {
 		var seenContext = new AtomicReference<TurnContext>();
 		Function<TurnContext, List<String>> strategy = ctx -> {
 			seenContext.set(ctx);
@@ -100,8 +100,78 @@ class WebhookHandlerTest {
 
 		handler.handle(signedHeaders(body, NOW), body, NOW);
 
-		assertThat(seenContext.get().remainingMillis()).isNull();
-		assertThat(seenContext.get().opponentRemainingMillis()).isNull();
+		assertThat(seenContext.get().clock()).isNull();
+	}
+
+	@Test
+	void aFischerControlSurfacesThePerTurnIncrementInMillis() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"clocks\":{\"white\":300000,\"black\":300000},"
+				+ "\"timeControl\":{\"Fischer\":{\"initialSeconds\":300,\"incrementSeconds\":3}}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().clock().incrementMillis()).isEqualTo(3000L);
+	}
+
+	@Test
+	void aNonFischerControlLeavesTheIncrementNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"clocks\":{\"white\":60000,\"black\":60000},"
+				+ "\"timeControl\":{\"SuddenDeath\":{\"initialSeconds\":60}}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().clock()).isNotNull();
+		assertThat(seenContext.get().clock().incrementMillis()).isNull();
+	}
+
+	@Test
+	void anAbsentTimeControlLeavesTheIncrementNull() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"clocks\":{\"white\":60000,\"black\":60000}}}";
+
+		handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(seenContext.get().clock().incrementMillis()).isNull();
+	}
+
+	@Test
+	void aMalformedIncrementDegradesToNullNotA400() {
+		var seenContext = new AtomicReference<TurnContext>();
+		Function<TurnContext, List<String>> strategy = ctx -> {
+			seenContext.set(ctx);
+			return List.of();
+		};
+		var handler = new WebhookHandler(SECRET, strategy);
+		// incrementSeconds present but not a number: the increment is optional guidance, so this
+		// must degrade to a null increment on a valid clock, never fail the turn with a 400.
+		var body = "{\"type\":\"yourTurn\",\"gameId\":\"g1\",\"seat\":\"White\",\"state\":{\"dfen\":\"x\","
+				+ "\"clocks\":{\"white\":300000,\"black\":300000},"
+				+ "\"timeControl\":{\"Fischer\":{\"initialSeconds\":300,\"incrementSeconds\":\"soon\"}}}}";
+
+		var response = handler.handle(signedHeaders(body, NOW), body, NOW);
+
+		assertThat(response.status()).isEqualTo(200);
+		assertThat(seenContext.get().clock().incrementMillis()).isNull();
 	}
 
 	@Test

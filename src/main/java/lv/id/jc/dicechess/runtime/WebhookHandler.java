@@ -30,6 +30,11 @@ public final class WebhookHandler {
 	/** Header carrying the hex HMAC-SHA256 signature (see {@link Signatures}). */
 	public static final String SIGNATURE_HEADER = "x-dicechess-signature";
 
+	// Webhook-state field names reused across parsing (extracted to avoid duplicated literals).
+	private static final String FIELD_CLOCKS = "clocks";
+	private static final String FIELD_TIME_CONTROL = "timeControl";
+	private static final String VARIANT_FISCHER = "Fischer";
+
 	private static final Gson GSON = new Gson();
 	private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 	private static final Duration FALLBACK_TIMEOUT = Duration.ofSeconds(5);
@@ -144,14 +149,21 @@ public final class WebhookHandler {
 		var state = envelope.getAsJsonObject("state");
 		var dfen = state.get("dfen").getAsString();
 
-		Long remainingMillis = null;
-		Long opponentRemainingMillis = null;
-		if (state.has("clocks") && !state.get("clocks").isJsonNull()) {
-			var clocks = state.getAsJsonObject("clocks");
-			var white = clocks.get("white").getAsLong();
-			var black = clocks.get("black").getAsLong();
-			remainingMillis = seat.equals("White") ? white : black;
-			opponentRemainingMillis = seat.equals("White") ? black : white;
+		// The game clock for this turn (null for an untimed game): play-api sends both sides'
+		// remaining time under "clocks" only for a timed control. The per-turn increment lives in
+		// "timeControl" and only its Fischer variant carries one — parsed defensively by
+		// fischerIncrementMillis, so a null increment on a present clock is a valid sudden-death or
+		// per-move game.
+		TurnContext.Clock clock = null;
+		if (state.has(FIELD_CLOCKS) && state.get(FIELD_CLOCKS).isJsonObject()) {
+			var clocks = state.getAsJsonObject(FIELD_CLOCKS);
+			if (clocks.has("white") && clocks.has("black")) {
+				var white = clocks.get("white").getAsLong();
+				var black = clocks.get("black").getAsLong();
+				var own = seat.equals("White") ? white : black;
+				var opponent = seat.equals("White") ? black : white;
+				clock = new TurnContext.Clock(own, opponent, fischerIncrementMillis(state));
+			}
 		}
 
 		List<List<String>> legalMoves = null;
@@ -166,7 +178,7 @@ public final class WebhookHandler {
 			}
 		}
 
-		var context = new TurnContext(gameId, dfen, remainingMillis, opponentRemainingMillis, legalMoves);
+		var context = new TurnContext(gameId, dfen, clock, legalMoves);
 
 		List<String> moves;
 		try {
@@ -225,6 +237,36 @@ public final class WebhookHandler {
 			}
 		}
 		return paths;
+	}
+
+	/**
+	 * The per-turn Fischer increment in milliseconds from the envelope's {@code timeControl}, or
+	 * {@code null} when the control is not Fischer or the field is missing or malformed. Fully
+	 * defensive: only a numeric, non-negative {@code incrementSeconds} within {@code int} range is
+	 * accepted, so no input can throw (which {@link #handle} would turn into a 400) or overflow the
+	 * conversion to milliseconds.
+	 */
+	private static Long fischerIncrementMillis(JsonObject state) {
+		if (!state.has(FIELD_TIME_CONTROL) || !state.get(FIELD_TIME_CONTROL).isJsonObject()) {
+			return null;
+		}
+		var timeControl = state.getAsJsonObject(FIELD_TIME_CONTROL);
+		if (!timeControl.has(VARIANT_FISCHER) || !timeControl.get(VARIANT_FISCHER).isJsonObject()) {
+			return null;
+		}
+		var increment = timeControl.getAsJsonObject(VARIANT_FISCHER).get("incrementSeconds");
+		if (increment == null || !increment.isJsonPrimitive() || !increment.getAsJsonPrimitive().isNumber()) {
+			return null;
+		}
+		try {
+			var seconds = increment.getAsLong();
+			return seconds >= 0 && seconds <= Integer.MAX_VALUE ? seconds * 1000L : null;
+		} catch (NumberFormatException e) {
+			// getAsLong() documents this throw for untrusted input. The isNumber() guard already
+			// routes to the non-throwing path in current Gson, but catching keeps the "no input can
+			// throw" contract true against Gson's documented API rather than its internals.
+			return null;
+		}
 	}
 
 	private static String stripTrailingSlash(String url) {

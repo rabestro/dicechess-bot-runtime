@@ -258,8 +258,15 @@ public final class WebhookHandler {
 		if (increment == null || !increment.isJsonPrimitive() || !increment.getAsJsonPrimitive().isNumber()) {
 			return null;
 		}
-		var seconds = increment.getAsLong();
-		return seconds >= 0 && seconds <= Integer.MAX_VALUE ? seconds * 1000L : null;
+		try {
+			var seconds = increment.getAsLong();
+			return seconds >= 0 && seconds <= Integer.MAX_VALUE ? seconds * 1000L : null;
+		} catch (NumberFormatException e) {
+			// getAsLong() documents this throw for untrusted input. The isNumber() guard already
+			// routes to the non-throwing path in current Gson, but catching keeps the "no input can
+			// throw" contract true against Gson's documented API rather than its internals.
+			return null;
+		}
 	}
 
 	private static String stripTrailingSlash(String url) {

@@ -57,10 +57,10 @@
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
 
-        <!-- The first release published through this plugin stays a manual promotion: flip to
-             `true` (and set the release profile's `waitUntil` to `published`) once its Central
-             Portal validation report has been inspected at least once. -->
-        <centralPublishing.autoPublish>false</centralPublishing.autoPublish>
+        <!-- v1.0.0 was the manual-promotion trial run: uploaded, validated clean (no rejection),
+             published by hand. Auto-publish from here on — see the release profile's `waitUntil`
+             below, which now waits for that same terminal state instead of just `validated`. -->
+        <centralPublishing.autoPublish>true</centralPublishing.autoPublish>
     </properties>
 
     <dependencies>
@@ -190,6 +190,11 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>${centralPublishing.autoPublish}</autoPublish>
+                            <!-- With autoPublish on, "published" is a state the deployment actually
+                                 reaches on its own — waiting for it (rather than the default
+                                 `validated`) means a post-validation failure fails the release step
+                                 instead of silently leaving an unpublished deployment behind. -->
+                            <waitUntil>published</waitUntil>
                         </configuration>
                     </plugin>
                 </plugins>

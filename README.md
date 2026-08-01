@@ -3,7 +3,8 @@
 [![CI](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/ci.yml)
 [![Code Quality](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/qodana.yml/badge.svg)](https://github.com/rabestro/dicechess-bot-runtime/actions/workflows/qodana.yml)
 [![Javadoc](https://img.shields.io/badge/Javadoc-jc.id.lv-1E90FF)](https://jc.id.lv/dicechess-bot-runtime/)
-[![Release](https://img.shields.io/github/v/tag/rabestro/dicechess-bot-runtime?label=release&sort=semver)](https://github.com/rabestro/dicechess-bot-runtime/packages)
+[![Maven Central](https://img.shields.io/maven-central/v/lv.id.jc/dicechess-bot-runtime)](https://central.sonatype.com/artifact/lv.id.jc/dicechess-bot-runtime)
+[![Release](https://img.shields.io/github/v/tag/rabestro/dicechess-bot-runtime?label=release&sort=semver)](https://github.com/rabestro/dicechess-bot-runtime/releases)
 ![Java](https://img.shields.io/badge/Java-25-orange)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](./LICENSE)
 
@@ -50,7 +51,8 @@ Full API docs with more examples: <https://jc.id.lv/dicechess-bot-runtime/>.
 
 ### Depend on it
 
-Published to GitHub Packages as `lv.id.jc:dicechess-bot-runtime`.
+Published to Maven Central as `lv.id.jc:dicechess-bot-runtime` — no extra repository
+configuration needed. Replace `VERSION` below with whatever the badge above currently shows.
 
 Maven:
 
@@ -58,15 +60,18 @@ Maven:
 <dependency>
 	<groupId>lv.id.jc</groupId>
 	<artifactId>dicechess-bot-runtime</artifactId>
-	<version>0.1.0</version>
+	<version>VERSION</version>
 </dependency>
 ```
 
 sbt (plain `%`, not `%%` — this is a Java artifact, not cross-built per Scala version):
 
 ```scala
-libraryDependencies += "lv.id.jc" % "dicechess-bot-runtime" % "0.1.0"
+libraryDependencies += "lv.id.jc" % "dicechess-bot-runtime" % "VERSION"
 ```
+
+Requires a JRE 25 or newer — the jar's bytecode targets class file version 69 and an older JVM
+will refuse to load it (`Unsupported class file version`).
 
 ## Local development
 

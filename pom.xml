@@ -38,6 +38,7 @@
     <scm>
         <url>https://github.com/rabestro/dicechess-bot-runtime</url>
         <connection>scm:git:https://github.com/rabestro/dicechess-bot-runtime.git</connection>
+        <developerConnection>scm:git:https://github.com/rabestro/dicechess-bot-runtime.git</developerConnection>
     </scm>
 
     <properties>
@@ -51,6 +52,14 @@
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+        <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
+
+        <!-- The first release published through this plugin stays a manual promotion: flip to
+             `true` (and set the release profile's `waitUntil` to `published`) once its Central
+             Portal validation report has been inspected at least once. -->
+        <centralPublishing.autoPublish>false</centralPublishing.autoPublish>
     </properties>
 
     <dependencies>
@@ -112,14 +121,70 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Central rejects a bundle with no sources jar. Attached unconditionally, the same way
+                 the javadoc jar above already is, so `mvn package` alone always produces the complete,
+                 publishable artifact set — nothing release-specific to remember on a normal build. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven-source-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
-    <distributionManagement>
-        <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/rabestro/dicechess-bot-runtime</url>
-        </repository>
-    </distributionManagement>
+    <!-- Signing and the Central Portal upload activate only under `-P release` (the release/cd
+         workflows): a laptop `mvn test`/`mvn package` needs neither a GPG passphrase nor Central
+         credentials, and stays exactly as fast as it is today. -->
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>${centralPublishing.autoPublish}</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <!-- No <distributionManagement>: with the release profile's central-publishing-maven-plugin
+         extension active, it owns `deploy` outright — bundling jar+sources+javadoc+signatures and
+         uploading straight to the Central Portal API — so a distribution repository entry has
+         nothing left to route. A plain `mvn deploy` outside `-P release` now fails fast with no
+         repository configured, which is the correct behavior: nothing should reach for it outside
+         the release automation. Versions already on GitHub Packages (0.1.0 through 0.2.2) stay
+         resolvable there regardless — this only changes where NEW versions go. -->
 </project>
